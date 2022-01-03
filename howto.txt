@@ -1,0 +1,18 @@
+compile test:
+> GOOS=linux go build -i -o bin/chanel-send-main cmd/chanel_send/main.go
+> go test -c -i -o bin/chanel-send github.com/alextomaili/go-base-examples/pkg/chanel_send
+
+> bin/chanel-send -test.v -test.bench ^BenchmarkSendBlockingChanel$ -test.run ^$ -test.cpuprofile BenchmarkSendBlockingChanel.cpu.prof -test.blockprofile BenchmarkSendBlockingChanel.block.prof
+> bin/chanel-send -test.v -test.bench ^BenchmarkSendBufferedChanel$ -test.run ^$ -test.cpuprofile BenchmarkSendBufferedChanel.cpu.prof -test.blockprofile BenchmarkSendBufferedChanel.block.prof
+
+> go tool pprof bin/chanel-send BenchmarkSendBlockingChanel.cpu.prof
+
+
+pprof:
+> sudo perf stat -e 'syscalls:sys_*' ./chanel_send_main --s=100 2>&1 | awk '$1 != 0'
+> sudo perf record -F 999 -g ./chanel_send_main --s=100
+( > sudo perf report -i perf.data.block --no-children )
+
+> sudo perf record -e 'syscalls:sys_*nanosleep*' -ag ./chanel_send_main
+( > sudo perf report -i perf.data.block.nanasleep )
+
