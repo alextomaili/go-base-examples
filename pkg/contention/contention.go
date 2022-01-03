@@ -31,7 +31,7 @@ func fillStorage(storage Counter, k []Key, v []int64) {
 	}
 }
 
-func AggregateTest(b *testing.B, storage Counter, writers, readers int) {
+func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitReaders bool) {
 	b.StopTimer()
 
 	keys := make([]Key, b.N)
@@ -58,13 +58,17 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int) {
 
 	result = make([]int64, readers)
 	for i := 0; i < readers; i++ {
-		wg.Add(1)
+		if waitReaders {
+			wg.Add(1)
+		}
 		go func(n int) {
 			start.Wait()
 			for _, k := range keys {
 				result[n] += storage.Get(k)
 			}
-			wg.Done()
+			if waitReaders {
+				wg.Done()
+			}
 		}(i)
 	}
 
