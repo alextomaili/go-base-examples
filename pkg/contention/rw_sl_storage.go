@@ -30,7 +30,7 @@ func (s *RwSlStorage) hashSlot(k Key) int {
 	return h & (s.bn - 1)
 }
 
-func (s *RwSlStorage) Apply(msg Message) {
+func (s *RwSlStorage) Apply(msg Message, _ int) {
 	k := msg.Key
 	i := s.hashSlot(k)
 

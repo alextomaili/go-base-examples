@@ -16,7 +16,7 @@ func NewRwStorage() *RwStorage {
 	}
 }
 
-func (s *RwStorage) Apply(msg Message) {
+func (s *RwStorage) Apply(msg Message, _ int) {
 	k := msg.Key
 	s.mutex.Lock()
 	s.aggregates[k] += msg.Value

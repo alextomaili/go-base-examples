@@ -16,7 +16,7 @@ func NewSyncMapStorage() *SyncMapStorage {
 	}
 }
 
-func (s *SyncMapStorage) Apply(msg Message) {
+func (s *SyncMapStorage) Apply(msg Message, _ int) {
 	k := msg.Key
 
 	s.mutex.Lock()

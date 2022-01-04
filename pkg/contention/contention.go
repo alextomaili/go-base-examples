@@ -15,19 +15,19 @@ type (
 		Value int64
 	}
 	Counter interface {
-		Apply(msg Message)
+		Apply(msg Message, wn int)
 		Get(key Key) int64
 	}
 )
 
 var result []int64
 
-func fillStorage(storage Counter, k []Key, v []int64) {
+func fillStorage(storage Counter, k []Key, v []int64, wn int) {
 	for i, k := range k {
 		m := Message{
 			Key: k, Value: v[i],
 		}
-		storage.Apply(m)
+		storage.Apply(m, wn)
 	}
 }
 
@@ -41,7 +41,7 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitRead
 		values = append(values, rand.Int63())
 	}
 	//все ключи будут присутствовать в тесте заранее
-	fillStorage(storage, keys, values)
+	fillStorage(storage, keys, values, 0)
 
 	start := sync.WaitGroup{}
 	start.Add(1)
@@ -49,11 +49,11 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitRead
 	wg := sync.WaitGroup{}
 	for i := 0; i < writers; i++ {
 		wg.Add(1)
-		go func() {
+		go func(n int) {
 			start.Wait()
-			fillStorage(storage, keys, values)
+			fillStorage(storage, keys, values, n)
 			wg.Done()
-		}()
+		}(i)
 	}
 
 	result = make([]int64, readers)
