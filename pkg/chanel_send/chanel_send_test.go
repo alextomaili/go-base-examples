@@ -4,10 +4,11 @@ import (
 	"testing"
 )
 
-func BenchmarkSendUnBufferedChanel(b *testing.B) {
-	SendChanel(b, make(chan int64))
-}
-
-func BenchmarkSendBufferedChanel(b *testing.B) {
-	SendChanel(b, make(chan int64, 1024))
+func BenchmarkSendChanel(b *testing.B) {
+	b.Run("BenchmarkSendUnBufferedChanel", func(b *testing.B) {
+		SendChanel(b, make(chan int64))
+	})
+	b.Run("BenchmarkSendBufferedChanel", func(b *testing.B) {
+		SendChanel(b, make(chan int64, 1024))
+	})
 }

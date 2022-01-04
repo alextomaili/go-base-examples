@@ -52,7 +52,6 @@ func (s *BatchStorage) worker(messages chan Message, chA, chB chan struct{}, act
 					case chB <- struct{}{}:
 						s.applyBatch(batch, wn)
 						active = false
-						//batch = make(map[Key]int64)
 						break
 					default:
 						t.Reset(s.swapInterval)
