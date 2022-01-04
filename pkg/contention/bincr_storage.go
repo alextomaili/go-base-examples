@@ -24,7 +24,7 @@ func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 		wc:           wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
-		swapInterval: time.Millisecond * 10,
+		swapInterval: time.Millisecond,
 		counter:      counter,
 	}
 	for i := 0; i < wc; i++ {
