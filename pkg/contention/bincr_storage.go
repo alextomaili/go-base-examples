@@ -21,7 +21,7 @@ func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 		wc:           wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
-		swapInterval: time.Millisecond * 5,
+		swapInterval: time.Millisecond * 10,
 		counter:      counter,
 	}
 	for i := 0; i < wc; i++ {
@@ -59,6 +59,7 @@ func (s *BIncrStorage) BatchGeneration() int64 {
 	return atomic.LoadInt64(&s.batchGen)
 }
 
+//go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
 	k := msg.Key
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
