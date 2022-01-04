@@ -20,7 +20,7 @@ type (
 
 func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
-		writers:      4,
+		writers:      1,
 		wc:           wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),

@@ -17,7 +17,7 @@ type (
 func NewBatchStorage(wc int, counter Counter) *BatchStorage {
 	r := &BatchStorage{
 		writers:      wc,
-		swapInterval: time.Hour,
+		swapInterval: time.Millisecond,
 		counter:      counter,
 	}
 	return r
@@ -35,7 +35,7 @@ func (s *BatchStorage) applyBatch(batch map[Key]int64, wn int) {
 }
 
 func (s *BatchStorage) worker(messages chan Message, chA, chB chan struct{}, active bool, wn int) {
-	batch := make(map[Key]int64)
+	batch := make(map[Key]int64, 100000)
 	var t *time.Timer
 
 	for {
@@ -50,8 +50,9 @@ func (s *BatchStorage) worker(messages chan Message, chA, chB chan struct{}, act
 				case <-t.C:
 					select {
 					case chB <- struct{}{}:
-						//s.applyBatch(batch, wn)
+						s.applyBatch(batch, wn)
 						active = false
+						//batch = make(map[Key]int64)
 						break
 					default:
 						t.Reset(s.swapInterval)
@@ -59,7 +60,7 @@ func (s *BatchStorage) worker(messages chan Message, chA, chB chan struct{}, act
 				case m, ok := <-messages:
 					if !ok {
 						close(chB)
-						//s.applyBatch(batch, wn)
+						s.applyBatch(batch, wn)
 						return
 					}
 					batch[m.Key] += m.Value
@@ -70,7 +71,7 @@ func (s *BatchStorage) worker(messages chan Message, chA, chB chan struct{}, act
 			case _, ok := <-chA:
 				if !ok {
 					close(chB)
-					//s.applyBatch(batch, wn)
+					s.applyBatch(batch, wn)
 					return
 				}
 				active = true
