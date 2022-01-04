@@ -1,12 +1,14 @@
 package contention
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type (
 	BIncrStorage struct {
+		writers      int
 		wc           int
 		writeBatch   int32
 		batches      [][2]map[Key]int64
@@ -18,6 +20,7 @@ type (
 
 func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
+		writers:      4,
 		wc:           wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
@@ -57,6 +60,20 @@ func (s *BIncrStorage) swap() {
 
 func (s *BIncrStorage) BatchGeneration() int64 {
 	return atomic.LoadInt64(&s.batchGen)
+}
+
+func (s *BIncrStorage) Consume(messages chan Message) {
+	wg := sync.WaitGroup{}
+	for i := 0; i < s.writers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			for m := range messages {
+				s.Apply(m, n)
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
 }
 
 //go:nosplit

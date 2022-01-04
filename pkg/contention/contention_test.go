@@ -42,7 +42,7 @@ func BenchmarkSyncMapStorage(b *testing.B) {
 	}
 }
 
-func BenchmarkBIncrStorage(b *testing.B) {
+func Benchmar_kBIncrStorage(b *testing.B) {
 	b.Run("BIncrStorage-w1-r0", func(b *testing.B) {
 		storage := NewBIncrStorage(writers, NewRwSlStorage(10))
 		AggregateTest(b, storage, 1, 0, waitReaders)
