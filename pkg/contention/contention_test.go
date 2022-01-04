@@ -42,15 +42,15 @@ func BenchmarkSyncMapStorage(b *testing.B) {
 	}
 }
 
-func Benchmar_kBIncrStorage(b *testing.B) {
+func BenchmarkBIncrStorage(b *testing.B) {
 	b.Run("BIncrStorage-w1-r0", func(b *testing.B) {
-		storage := NewBIncrStorage(writers, NewRwSlStorage(10))
+		storage := NewBatchStorage(1, NewRwSlStorage(10))
 		AggregateTest(b, storage, 1, 0, waitReaders)
 		//b.Logf("batch generation %v", storage.BatchGeneration())
 	})
 	for _, r := range readers {
 		b.Run("BIncrStorage-w4-r"+strconv.Itoa(r), func(b *testing.B) {
-			storage := NewBIncrStorage(writers, NewRwSlStorage(10))
+			storage := NewBatchStorage(writers, NewRwSlStorage(10))
 			AggregateTest(b, storage, writers, r, waitReaders)
 			//b.Logf("batch generation %v", storage.BatchGeneration())
 		})
