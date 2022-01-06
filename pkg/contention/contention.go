@@ -85,6 +85,7 @@ func AggregateTestA(b *testing.B, storage Counter, writers, readers int, waitRea
 	b.StartTimer()
 	start.Done()
 	wg.Wait()
+	b.StopTimer()
 }
 
 func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitReaders bool) {
@@ -139,4 +140,5 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitRead
 	}()
 
 	wg.Wait()
+	b.StopTimer()
 }

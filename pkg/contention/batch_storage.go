@@ -14,10 +14,10 @@ type (
 	}
 )
 
-func NewBatchStorage(wc int, counter Counter) *BatchStorage {
+func NewBatchStorage(wc int, swapInterval time.Duration, counter Counter) *BatchStorage {
 	r := &BatchStorage{
 		writers:      wc,
-		swapInterval: time.Millisecond,
+		swapInterval: swapInterval,
 		counter:      counter,
 	}
 	return r

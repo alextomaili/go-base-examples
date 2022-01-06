@@ -10,19 +10,22 @@ type (
 	BIncrStorage struct {
 		writers      int
 		writeBatch   int32
+		mCount       int32
+		mLock        int32
 		batches      [][2]map[Key]int64
 		swapInterval time.Duration
-		batchGen     int64
 		counter      Counter
+
+		batchGen int64
 	}
 )
 
-func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
+func NewBIncrStorage(wc int, swapInterval time.Duration, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
 		writers:      wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
-		swapInterval: time.Millisecond,
+		swapInterval: swapInterval,
 		counter:      counter,
 	}
 	for i := 0; i < wc; i++ {
@@ -34,11 +37,22 @@ func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 
 func (s *BIncrStorage) swap() {
 	for {
+		time.Sleep(s.swapInterval)
+
+		// raise flag
+		atomic.StoreInt32(&s.mLock, 1)
+		// wait mutators to be done
+		for atomic.LoadInt32(&s.mCount) > 0 {
+		}
+
+		//swap batch
 		readBatch := atomic.LoadInt32(&s.writeBatch)
 		atomic.StoreInt32(&s.writeBatch, (readBatch+1)&1)
 
-		//за это время врайтеры гарантировано добегут
-		time.Sleep(s.swapInterval)
+		//allow mutators
+		atomic.StoreInt32(&s.mLock, 0)
+
+		atomic.AddInt64(&s.batchGen, 1) //debug
 
 		//apply batch to main storage
 		for wn := 0; wn < s.writers; wn++ {
@@ -52,7 +66,6 @@ func (s *BIncrStorage) swap() {
 			}
 		}
 
-		atomic.AddInt64(&s.batchGen, 1)
 	}
 }
 
@@ -76,10 +89,28 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 
 //go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
+	atomic.AddInt32(&s.mCount, 1)
+	l := true
+	for {
+		mLock := atomic.LoadInt32(&s.mLock) //check lock
+		if mLock == 1 {
+			if l {
+				atomic.AddInt32(&s.mCount, -1)
+				l = false
+			}
+			continue
+		}
+		if !l {
+			atomic.AddInt32(&s.mCount, 1)
+		}
+		break
+	}
+
 	k := msg.Key
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
-
 	s.batches[wn][writeBatch][k] += msg.Value
+
+	atomic.AddInt32(&s.mCount, -1)
 }
 
 func (s *BIncrStorage) Get(k Key) int64 {
