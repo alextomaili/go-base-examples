@@ -9,7 +9,6 @@ import (
 type (
 	BIncrStorage struct {
 		writers      int
-		wc           int
 		writeBatch   int32
 		batches      [][2]map[Key]int64
 		swapInterval time.Duration
@@ -20,8 +19,7 @@ type (
 
 func NewBIncrStorage(wc int, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
-		writers:      1,
-		wc:           wc,
+		writers:      wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
 		swapInterval: time.Millisecond,
@@ -43,7 +41,7 @@ func (s *BIncrStorage) swap() {
 		time.Sleep(s.swapInterval)
 
 		//apply batch to main storage
-		for wn := 0; wn < s.wc; wn++ {
+		for wn := 0; wn < s.writers; wn++ {
 			for k, v := range s.batches[wn][readBatch] {
 				m := Message{
 					Key:   k,

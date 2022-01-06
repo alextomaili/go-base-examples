@@ -10,9 +10,9 @@ type (
 	}
 )
 
-func NewRwStorage() *RwStorage {
+func NewRwStorage(wc int) *RwStorage {
 	return &RwStorage{
-		writers:    4,
+		writers:    wc,
 		mutex:      sync.RWMutex{},
 		aggregates: make(map[Key]int64),
 	}

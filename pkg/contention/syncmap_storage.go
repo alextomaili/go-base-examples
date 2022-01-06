@@ -10,9 +10,9 @@ type (
 	}
 )
 
-func NewSyncMapStorage() *SyncMapStorage {
+func NewSyncMapStorage(wc int) *SyncMapStorage {
 	return &SyncMapStorage{
-		writers:    4,
+		writers:    wc,
 		mutex:      sync.RWMutex{},
 		aggregates: &sync.Map{},
 	}

@@ -11,10 +11,10 @@ type (
 	}
 )
 
-func NewRwSlStorage(bnPov2 int) *RwSlStorage {
+func NewRwSlStorage(bnPov2 int, wc int) *RwSlStorage {
 	bn := 2 << (bnPov2 - 1)
 	r := &RwSlStorage{
-		writers:    4,
+		writers:    wc,
 		bn:         bn,
 		mutex:      make([]sync.RWMutex, 0, bn),
 		aggregates: make([]map[Key]int64, 0, bn),
