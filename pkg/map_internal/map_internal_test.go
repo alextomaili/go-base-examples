@@ -53,13 +53,19 @@ func TestMapSize(t *testing.T) {
 	mAfter := _alloc()
 
 	bucketsCount = 1 << hm.B
-	mapSize = float32(mt.bucketsize) * float32(bucketsCount+int(hm.noverflow)) / gb
-	mapSizeByGC := float32(mAfter-mBefore) / gb
+	mapSize = float32(mt.bucketsize) * float32(bucketsCount+int(hm.noverflow))
+	bytesPerItem := mapSize / kvCount
+	mapSizeByGC := float32(mAfter - mBefore)
+	bytesPerItemByGc := mapSizeByGC / kvCount
 
 	fmt.Printf("\nafter fill:\n")
 	fmt.Printf("buckets count: %v\n", bucketsCount)
-	fmt.Printf("size: %v Gb\n", mapSize)
-	fmt.Printf("size by GC: %v Gb\n\n", mapSizeByGC)
+	fmt.Printf("noverflow: %v\n", hm.noverflow)
+	fmt.Printf("bucketsize: %v bytes\n", mt.bucketsize)
+	fmt.Printf("size: %v Gb\n", mapSize/gb)
+	fmt.Printf("bytes per item: %v\n", bytesPerItem)
+	fmt.Printf("size by GC: %v Gb\n", mapSizeByGC/gb)
+	fmt.Printf("bytes per item by Gc: %v\n\n", bytesPerItemByGc)
 }
 
 func _alloc() uint64 {
