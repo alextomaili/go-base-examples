@@ -74,3 +74,56 @@ func _alloc() uint64 {
 	runtime.ReadMemStats(&stats)
 	return stats.Alloc
 }
+
+type node struct {
+	left   int32
+	right  int32
+	parent int32
+	color  int32
+	id     int64
+	value  int64
+}
+
+var cK, cV int64
+
+func BenchmarkIterate(b *testing.B) {
+	b.Run("map[int64]int64", func(b *testing.B) {
+		b.StopTimer()
+		m := make(cmap, kvCount)
+		for i := 0; i < kvCount; i++ {
+			m[int64(i)] = int64(i * 3)
+		}
+		runtime.GC()
+		b.ReportAllocs()
+		b.StartTimer()
+
+		cK = 0
+		cV = 0
+		for k, v := range m {
+			cK += k
+			cV += v
+		}
+		//b.Logf("cK %v, cV %v", cK, cV)
+	})
+	b.Run("plain array of nodes", func(b *testing.B) {
+		b.StopTimer()
+		a := make([]node, 0, kvCount+1000)
+		for i := 0; i < kvCount; i++ {
+			a = append(a, node{
+				id:    int64(i),
+				value: int64(i * 3),
+			})
+		}
+		runtime.GC()
+		b.ReportAllocs()
+		b.StartTimer()
+
+		cK = 0
+		cV = 0
+		for _, n := range a {
+			cK += n.id
+			cV += n.value
+		}
+		//b.Logf("cK %v, cV %v", cK, cV)
+	})
+}
