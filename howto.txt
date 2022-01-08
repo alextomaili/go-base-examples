@@ -16,3 +16,19 @@ pprof:
 > sudo perf record -e 'syscalls:sys_*nanosleep*' -ag ./chanel_send_main
 ( > sudo perf report -i perf.data.block.nanasleep )
 
+
+snippets:
+>go test -c  -o bin/map_internal github.com/alextomaili/go-base-examples/pkg/map_internal
+>bin/map_internal -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$ -test.cpuprofile bin/map_internal.cpu.prof
+>go tool pprof bin/map_internal bin/map_internal.cpu.prof
+>go tool pprof -http=:6018 bin/map_internal bin/map_internal.cpu.prof
+
+>GOOS=linux go test -c  -o bin/map_internal_linux github.com/alextomaili/go-base-examples/pkg/map_internal
+>scp bin/map_internal_linux core-stg03.rtty.in:/home/a.tomaili/bin
+>bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
+
+>perf record -F 999 -g -o bin/map_internal.cpu.perf  bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
+
+
+
+
