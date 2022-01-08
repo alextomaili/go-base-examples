@@ -18,17 +18,22 @@ pprof:
 
 
 snippets:
->go test -c  -o bin/map_internal github.com/alextomaili/go-base-examples/pkg/map_internal
->bin/map_internal -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$ -test.cpuprofile bin/map_internal.cpu.prof
->go tool pprof bin/map_internal bin/map_internal.cpu.prof
->go tool pprof -http=:6018 bin/map_internal bin/map_internal.cpu.prof
+--- iterator map vs slice
+> go test -c  -o bin/map_internal github.com/alextomaili/go-base-examples/pkg/map_internal
+> bin/map_internal -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$ -test.cpuprofile bin/map_internal.cpu.prof
+> go tool pprof bin/map_internal bin/map_internal.cpu.prof
+> go tool pprof -http=:6018 bin/map_internal bin/map_internal.cpu.prof
 
->GOOS=linux go test -c  -o bin/map_internal_linux github.com/alextomaili/go-base-examples/pkg/map_internal
->scp bin/map_internal_linux core-stg03.rtty.in:/home/a.tomaili/bin
->bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
+> GOOS=linux go test -c  -o bin/map_internal_linux github.com/alextomaili/go-base-examples/pkg/map_internal
+> scp bin/map_internal_linux core-stg03.rtty.in:/home/a.tomaili/bin
+> bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
 
->perf record -F 999 -g -o bin/map_internal.cpu.perf  bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
+> perf record -F 999 -g -o bin/map_internal.cpu.perf  bin/map_internal_linux -test.v -test.paniconexit0 -test.bench "^\QBenchmarkIterate\E$/^\Qmap[int64]int64\E$" -test.run ^$
 
-
+--- send to chanel
+> go test -c  -o bin/chanel_send github.com/alextomaili/go-base-examples/pkg/chanel_send
+> bin/chanel_send -test.v -test.paniconexit0 -test.bench "^\QBenchmarkSendChanel\E$/^\QBenchmarkSendUnBufferedChanel\E$" -test.run ^$ -test.cpuprofile bin/chanel_send.cpu.prof -test.blockprofile bin/chanel_send.block.prof -test.blockprofilerate 100
+> go tool pprof -http=:6018 bin/chanel_send bin/chanel_send.block.prof
+> go tool pprof -http=:6019 bin/chanel_send bin/chanel_send.cpu.prof
 
 
