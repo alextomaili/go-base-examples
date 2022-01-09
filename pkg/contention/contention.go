@@ -88,24 +88,33 @@ func AggregateTestA(b *testing.B, storage Counter, writers, readers int, waitRea
 	b.StopTimer()
 }
 
-func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitReaders bool) {
-	b.StopTimer()
-
+func testData(b *testing.B) ([]Key, []int64) {
 	keys := make([]Key, b.N)
 	values := make([]int64, b.N)
 	for i := 0; i < b.N; i++ {
 		keys = append(keys, Key{x: rand.Intn(10000), y: rand.Intn(255)})
 		values = append(values, rand.Int63())
 	}
+	return keys, values
+}
+
+func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitReaders bool) {
+	b.StopTimer()
+
+	keys, values := testData(b)
 	//все ключи будут присутствовать в тесте заранее
 	fillStorage(storage, keys, values, 0)
 
+	//канал для входных данных
 	messages := make(chan Message, writers*b.N)
 
 	start := sync.WaitGroup{}
 	start.Add(1)
 
 	wg := sync.WaitGroup{}
+
+	//запустим писателей
+	//читают из входного канала, пишут в storage
 	wg.Add(1)
 	go func() {
 		start.Wait()
@@ -113,6 +122,8 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitRead
 		wg.Done()
 	}()
 
+	//запустим читателей
+	//читают агрегированные данные из storage
 	result = make([]int64, readers)
 	for i := 0; i < readers; i++ {
 		if waitReaders {
@@ -130,8 +141,10 @@ func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitRead
 	}
 
 	b.StartTimer()
+	//стартуем читателей и писателей
 	start.Done()
 
+	//начинаем писать данные во входной канал
 	go func() {
 		for i := 0; i < writers; i++ {
 			fillChanel(messages, keys, values)
