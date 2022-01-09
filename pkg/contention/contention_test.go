@@ -7,7 +7,8 @@ import (
 )
 
 var writers = 4
-var readers = [...]int{0, 1, 5, 10, 20, 30, 40, 50}
+//var readers = [...]int{0, 1, 5, 10, 20, 30, 40, 50}
+var readers = [...]int{10}
 var waitReaders = false
 var swapInterval = time.Microsecond * 100
 
@@ -44,19 +45,6 @@ func BenchmarkSyncMapStorage(b *testing.B) {
 	}
 }
 
-func BenchmarkBatchStorage(b *testing.B) {
-	b.Run("BatchStorage-w1-r0", func(b *testing.B) {
-		storage := NewBatchStorage(1, swapInterval, NewRwSlStorage(10, 1))
-		AggregateTest(b, storage, 1, 0, waitReaders)
-	})
-	for _, r := range readers {
-		b.Run("BatchStorage-w4-r"+strconv.Itoa(r), func(b *testing.B) {
-			storage := NewBatchStorage(writers, swapInterval, NewRwSlStorage(10, writers))
-			AggregateTest(b, storage, writers, r, waitReaders)
-		})
-	}
-}
-
 func BenchmarkBIncrStorage(b *testing.B) {
 	b.Run("BIncrStorage-w1-r0", func(b *testing.B) {
 		storage := NewBIncrStorage(1, swapInterval, NewRwSlStorage(10, 1))
@@ -71,3 +59,18 @@ func BenchmarkBIncrStorage(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkBatchStorage(b *testing.B) {
+	b.Run("BatchStorage-w1-r0", func(b *testing.B) {
+		storage := NewBatchStorage(1, swapInterval, NewRwSlStorage(10, 1))
+		AggregateTest(b, storage, 1, 0, waitReaders)
+	})
+	for _, r := range readers {
+		b.Run("BatchStorage-w4-r"+strconv.Itoa(r), func(b *testing.B) {
+			storage := NewBatchStorage(writers, swapInterval, NewRwSlStorage(10, writers))
+			AggregateTest(b, storage, writers, r, waitReaders)
+		})
+	}
+}
+
+

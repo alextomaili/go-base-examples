@@ -100,6 +100,7 @@ func testData(b *testing.B) ([]Key, []int64) {
 
 func AggregateTest(b *testing.B, storage Counter, writers, readers int, waitReaders bool) {
 	b.StopTimer()
+	b.ReportAllocs()
 
 	keys, values := testData(b)
 	//все ключи будут присутствовать в тесте заранее
