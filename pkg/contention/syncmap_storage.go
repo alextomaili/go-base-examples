@@ -5,7 +5,7 @@ import "sync"
 type (
 	SyncMapStorage struct {
 		writers    int
-		mutex      sync.RWMutex
+		mutex      sync.Mutex
 		aggregates *sync.Map
 	}
 )
@@ -13,7 +13,7 @@ type (
 func NewSyncMapStorage(wc int) *SyncMapStorage {
 	return &SyncMapStorage{
 		writers:    wc,
-		mutex:      sync.RWMutex{},
+		mutex:      sync.Mutex{},
 		aggregates: &sync.Map{},
 	}
 }
