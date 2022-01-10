@@ -6,33 +6,31 @@ import (
 	"time"
 )
 
-type (
-	BIncrStorage struct {
-		// Хранилище для агрегации данных
-		storage Counter
+type BIncrStorage struct {
+	// Хранилище для агрегации данных
+	storage Counter
 
-		// Число потоков, пишущих в хранилище
-		writersCount int
+	// Число потоков, пишущих в хранилище
+	writersCount int
 
-		// Каждый писатель имеет пару контейнеров для предварительной
-		// агрегации данных. Писатель пишет в один контейнер отдельная
-		// горутина применяет второй контейнер к основному хранилищу
-		batches [][2]map[Key]int64
+	// Каждый писатель имеет пару контейнеров для предварительной
+	// агрегации данных. Писатель пишет в один контейнер отдельная
+	// горутина применяет второй контейнер к основному хранилищу
+	batches [][2]map[Key]int64
 
-		// Номер активного контейнера для записи
-		writeBatch int32
+	// Номер активного контейнера для записи
+	writeBatch int32
 
-		// Количество активных писателей
-		pendingWriters int32
-		// Флаг синхронизации для переключения активного контейнера
-		swapLock int32
+	// Количество активных писателей
+	pendingWriters int32
+	// Флаг синхронизации для переключения активного контейнера
+	swapLock int32
 
-		// Интервал предварительной агрегации
-		swapInterval time.Duration
+	// Интервал предварительной агрегации
+	swapInterval time.Duration
 
-		batchGen int64 //debug
-	}
-)
+	batchGen int64 //debug
+}
 
 func NewBIncrStorage(wc int, swapInterval time.Duration, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
