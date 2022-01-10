@@ -8,7 +8,7 @@ import (
 
 type (
 	BIncrStorage struct {
-		writers        int
+		writersCount   int
 		writeBatch     int32
 		pendingWriters int32
 		swapLock       int32
@@ -23,7 +23,7 @@ type (
 
 func NewBIncrStorage(wc int, swapInterval time.Duration, counter Counter) *BIncrStorage {
 	r := &BIncrStorage{
-		writers:      wc,
+		writersCount: wc,
 		writeBatch:   0,
 		batches:      make([][2]map[Key]int64, 0, wc),
 		swapInterval: swapInterval,
@@ -37,7 +37,7 @@ func NewBIncrStorage(wc int, swapInterval time.Duration, counter Counter) *BIncr
 }
 
 func (s *BIncrStorage) applyBatchToStorage(readBatch int32) {
-	for wn := 0; wn < s.writers; wn++ {
+	for wn := 0; wn < s.writersCount; wn++ {
 		for k, v := range s.batches[wn][readBatch] {
 			m := Message{
 				Key:   k,
@@ -80,7 +80,7 @@ func (s *BIncrStorage) BatchGeneration() int64 {
 
 func (s *BIncrStorage) Consume(messages chan Message) {
 	wg := sync.WaitGroup{}
-	for i := 0; i < s.writers; i++ {
+	for i := 0; i < s.writersCount; i++ {
 		wg.Add(1)
 		go func(n int) {
 			for m := range messages {
@@ -109,7 +109,6 @@ func (s *BIncrStorage) Apply(msg Message, wn int) {
 	if !holdLock {
 		atomic.AddInt32(&s.pendingWriters, 1)
 	}
-
 
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
