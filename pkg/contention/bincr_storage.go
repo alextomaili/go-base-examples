@@ -106,7 +106,6 @@ func (s *BIncrStorage) Apply(msg Message, wn int) {
 			atomic.AddInt32(&s.pendingWriters, -1)
 		}
 	}
-	// <<<
 	if !holdLock {
 		atomic.AddInt32(&s.pendingWriters, 1)
 	}
