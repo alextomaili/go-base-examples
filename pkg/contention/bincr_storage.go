@@ -54,9 +54,11 @@ func (s *BIncrStorage) swapAndApplyBatch() {
 		time.Sleep(s.swapInterval)
 
 		atomic.StoreInt32(&s.swapLock, 1)
-
 		// wait for all pending readers
-		for atomic.LoadInt32(&s.pendingWriters) > 0 {
+		for {
+			if atomic.LoadInt32(&s.pendingWriters) == 0 {
+				break
+			}
 		}
 
 		//swap batch
@@ -93,21 +95,22 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 //go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
 	atomic.AddInt32(&s.pendingWriters, 1)
-	l := true
+
+	holdLock := true
 	for {
-		mLock := atomic.LoadInt32(&s.swapLock) //check lock
-		if mLock == 1 {
-			if l {
-				atomic.AddInt32(&s.pendingWriters, -1)
-				l = false
-			}
-			continue
+		if atomic.LoadInt32(&s.swapLock) == 0 {
+			break
 		}
-		if !l {
-			atomic.AddInt32(&s.pendingWriters, 1)
+		if holdLock {
+			holdLock = false
+			atomic.AddInt32(&s.pendingWriters, -1)
 		}
-		break
 	}
+	// <<<
+	if !holdLock {
+		atomic.AddInt32(&s.pendingWriters, 1)
+	}
+
 
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
