@@ -8,14 +8,27 @@ import (
 
 type (
 	BIncrStorage struct {
-		writersCount   int
-		writeBatch     int32
-		pendingWriters int32
-		swapLock       int32
-		batches        [][2]map[Key]int64
-		swapInterval   time.Duration
-
+		// Хранилище для агрегации данных
 		storage Counter
+
+		// Число потоков, пишущих в хранилище
+		writersCount int
+
+		// Каждый писатель имеет пару контейнеров для предварительной
+		// агрегации данных. Писатель пишет в один контейнер отдельная
+		// горутина применяет второй контейнер к основному хранилищу
+		batches [][2]map[Key]int64
+
+		// Номер активного контейнера для записи
+		writeBatch int32
+
+		// Количество активных писателей
+		pendingWriters int32
+		// Флаг синхронизации для переключения активного контейнера
+		swapLock int32
+
+		// Интервал предварительной агрегации
+		swapInterval time.Duration
 
 		batchGen int64 //debug
 	}
