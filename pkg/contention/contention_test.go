@@ -8,6 +8,7 @@ import (
 
 var writers = 4
 var readers = [...]int{0, 1, 5, 10, 20, 30, 40, 50}
+
 //var readers = [...]int{10}
 var waitReaders = false
 var swapInterval = time.Microsecond * 100
@@ -72,5 +73,3 @@ func BenchmarkBatchStorage(b *testing.B) {
 		})
 	}
 }
-
-

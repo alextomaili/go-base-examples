@@ -62,25 +62,26 @@ func (s *BIncrStorage) applyBatchToStorage(readBatch int32) {
 
 func (s *BIncrStorage) swapAndApplyBatch() {
 	for {
+		// Отмерим интервал агрегации
 		time.Sleep(s.swapInterval)
 
+		// Поднимем семафор чтобы новые писатели встали
 		atomic.StoreInt32(&s.swapLock, 1)
-		// wait for all pending readers
-		for {
-			if atomic.LoadInt32(&s.activeWriters) == 0 {
-				break
-			}
+
+		// Дождемся пока старые писатели добегут
+		for atomic.LoadInt32(&s.activeWriters) > 0 {
 		}
 
-		//swap batch
+		// Переключим активный батч
 		readBatch := atomic.LoadInt32(&s.writeBatch)
 		atomic.StoreInt32(&s.writeBatch, (readBatch+1)&1)
 
+		// Разрешим писателям снова писать
 		atomic.StoreInt32(&s.swapLock, 0)
 
 		atomic.AddInt64(&s.batchGen, 1) //debug
 
-		//apply batch to main storage
+		// Применим не активный батч к хранилищу
 		s.applyBatchToStorage(readBatch)
 	}
 }
@@ -106,25 +107,31 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 //go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
 	for {
+		// Хотим писать - поднимем семафор
 		atomic.AddInt32(&s.activeWriters, 1)
 
+		// Если писать запрещено - опустим семафор и
+		// будем ждать разрешения
 		blocked := false
 		if atomic.LoadInt32(&s.swapLock) == 1 {
-			atomic.AddInt32(&s.activeWriters, -1)
 			blocked = true
-
+			atomic.AddInt32(&s.activeWriters, -1)
 			for atomic.LoadInt32(&s.swapLock) == 1 {
 			}
 		}
 
+		// Если мы владеем семафором - идем писать
+		// Если нет - пробуем снова
 		if !blocked {
 			break
 		}
 	}
 
+	// Пишем в активный батч
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
 
+	// Опустим семафор
 	atomic.AddInt32(&s.activeWriters, -1)
 }
 
