@@ -65,7 +65,7 @@ func (s *BIncrStorage) swapAndApplyBatch() {
 		// Отмерим интервал агрегации
 		time.Sleep(s.swapInterval)
 
-		// переключим
+		// переключим активный батч
 		readBatch := s.swapBatch()
 
 		// Применим не активный батч к хранилищу
@@ -134,8 +134,10 @@ func (s *BIncrStorage) Apply(msg Message, wn int) {
 		}
 	}
 
-	// Пишем в активный батч
+	// Возьмем активный батч
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
+
+	// Пишем в активный батч
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
 
 	// Опустим семафор
