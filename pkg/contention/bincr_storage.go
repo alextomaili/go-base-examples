@@ -73,6 +73,7 @@ func (s *BIncrStorage) swapAndApplyBatch() {
 	}
 }
 
+//go:nosplit
 func (s *BIncrStorage) swapBatch() int32 {
 	// Поднимем семафор чтобы новые писатели встали
 	atomic.StoreInt32(&s.swapLock, 1)
