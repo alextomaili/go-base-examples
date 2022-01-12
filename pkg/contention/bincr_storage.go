@@ -105,21 +105,21 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 
 //go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
-
-lock:
-	atomic.AddInt32(&s.activeWriters, 1)
-	holdLock := true
 	for {
-		if atomic.LoadInt32(&s.swapLock) == 0 {
+		atomic.AddInt32(&s.activeWriters, 1)
+
+		blocked := false
+		if atomic.LoadInt32(&s.swapLock) == 1 {
+			atomic.AddInt32(&s.activeWriters, -1)
+			blocked = true
+
+			for atomic.LoadInt32(&s.swapLock) == 1 {
+			}
+		}
+
+		if !blocked {
 			break
 		}
-		if holdLock {
-			holdLock = false
-			atomic.AddInt32(&s.activeWriters, -1)
-		}
-	}
-	if !holdLock {
-		goto lock
 	}
 
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
