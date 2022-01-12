@@ -22,7 +22,7 @@ type BIncrStorage struct {
 	writeBatch int32
 
 	// Количество активных писателей
-	pendingWriters int32
+	activeWriters int32
 	// Флаг синхронизации для переключения активного контейнера
 	swapLock int32
 
@@ -67,7 +67,7 @@ func (s *BIncrStorage) swapAndApplyBatch() {
 		atomic.StoreInt32(&s.swapLock, 1)
 		// wait for all pending readers
 		for {
-			if atomic.LoadInt32(&s.pendingWriters) == 0 {
+			if atomic.LoadInt32(&s.activeWriters) == 0 {
 				break
 			}
 		}
@@ -107,7 +107,7 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 func (s *BIncrStorage) Apply(msg Message, wn int) {
 
 lock:
-	atomic.AddInt32(&s.pendingWriters, 1)
+	atomic.AddInt32(&s.activeWriters, 1)
 	holdLock := true
 	for {
 		if atomic.LoadInt32(&s.swapLock) == 0 {
@@ -115,7 +115,7 @@ lock:
 		}
 		if holdLock {
 			holdLock = false
-			atomic.AddInt32(&s.pendingWriters, -1)
+			atomic.AddInt32(&s.activeWriters, -1)
 		}
 	}
 	if !holdLock {
@@ -125,7 +125,7 @@ lock:
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
 
-	atomic.AddInt32(&s.pendingWriters, -1)
+	atomic.AddInt32(&s.activeWriters, -1)
 }
 
 func (s *BIncrStorage) Get(k Key) int64 {
