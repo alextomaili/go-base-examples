@@ -65,25 +65,31 @@ func (s *BIncrStorage) swapAndApplyBatch() {
 		// Отмерим интервал агрегации
 		time.Sleep(s.swapInterval)
 
-		// Поднимем семафор чтобы новые писатели встали
-		atomic.StoreInt32(&s.swapLock, 1)
-
-		// Дождемся пока старые писатели добегут
-		for atomic.LoadInt32(&s.activeWriters) > 0 {
-		}
-
-		// Переключим активный батч
-		readBatch := atomic.LoadInt32(&s.writeBatch)
-		atomic.StoreInt32(&s.writeBatch, (readBatch+1)&1)
-
-		// Разрешим писателям снова писать
-		atomic.StoreInt32(&s.swapLock, 0)
-
-		atomic.AddInt64(&s.batchGen, 1) //debug
+		// переключим
+		readBatch := s.swapBatch()
 
 		// Применим не активный батч к хранилищу
 		s.applyBatchToStorage(readBatch)
 	}
+}
+
+func (s *BIncrStorage) swapBatch() int32 {
+	// Поднимем семафор чтобы новые писатели встали
+	atomic.StoreInt32(&s.swapLock, 1)
+
+	// Дождемся пока старые писатели добегут
+	for atomic.LoadInt32(&s.activeWriters) > 0 {
+	}
+
+	// Переключим активный батч
+	readBatch := atomic.LoadInt32(&s.writeBatch)
+	atomic.StoreInt32(&s.writeBatch, (readBatch+1)&1)
+
+	// Разрешим писателям снова писать
+	atomic.StoreInt32(&s.swapLock, 0)
+
+	atomic.AddInt64(&s.batchGen, 1) //debug
+	return readBatch
 }
 
 func (s *BIncrStorage) BatchGeneration() int64 {
