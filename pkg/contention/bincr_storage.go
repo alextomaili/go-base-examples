@@ -113,34 +113,24 @@ func (s *BIncrStorage) Consume(messages chan Message) {
 
 //go:nosplit
 func (s *BIncrStorage) Apply(msg Message, wn int) {
-	for {
-		// Хотим писать - поднимем семафор
-		atomic.AddInt32(&s.activeWriters, 1)
 
-		// Если писать запрещено - опустим семафор и
-		// будем ждать разрешения
-		blocked := false
+	for canWrite := false; canWrite == false; {
+		atomic.AddInt32(&s.activeWriters, 1)
+		canWrite = true
+
+		// Если писать запрещено - ждем разрешения
 		if atomic.LoadInt32(&s.swapLock) == 1 {
-			blocked = true
 			atomic.AddInt32(&s.activeWriters, -1)
+			canWrite = false
 			for atomic.LoadInt32(&s.swapLock) == 1 {
 			}
 		}
-
-		// Если мы владеем семафором - идем писать
-		// Если нет - пробуем снова
-		if !blocked {
-			break
-		}
 	}
 
-	// Возьмем активный батч
+	// Возьмем активный батч и запишем в него
 	writeBatch := atomic.LoadInt32(&s.writeBatch)
-
-	// Пишем в активный батч
 	s.batches[wn][writeBatch][msg.Key] += msg.Value
 
-	// Опустим семафор
 	atomic.AddInt32(&s.activeWriters, -1)
 }
 
