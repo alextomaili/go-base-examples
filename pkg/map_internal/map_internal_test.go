@@ -28,6 +28,8 @@ type (
 	}
 )
 
+var a []node
+
 func TestMapInside(t *testing.T) {
 	m := make(cmap)
 	mt, _ := mapTypeAndValue(m)

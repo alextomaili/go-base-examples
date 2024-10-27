@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/alextomaili/go-base-examples/pkg/chanel_send"
+	"sync"
 	"testing"
 )
 
@@ -12,6 +13,10 @@ var (
 )
 
 func main() {
+	m := sync.Mutex{}
+	m.Lock()
+	m.Lock()
+
 	flag.Parse()
 	chanel_send.SendChanel(&testing.B{
 		N: *n,

@@ -1,3 +1,3 @@
 module github.com/alextomaili/go-base-examples
 
-go 1.17
+go 1.23
