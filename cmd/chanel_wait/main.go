@@ -10,13 +10,15 @@ func main() {
 	//var c chan bool
 
 	go func() {
-		time.Sleep(time.Hour)
+		time.Sleep(2 * time.Second)
 		c <- true
 	}()
 
 	fmt.Println("Start & waint on chanell")
 
 	b := <-c
+
+	close(c)
 
 	fmt.Println("received", b)
 }
