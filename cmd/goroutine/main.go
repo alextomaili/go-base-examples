@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 /*
@@ -11,7 +12,55 @@ import (
 	runtime.GOMAXPROCS(maxProcs)
 */
 
+type MyWg struct {
+	counter int64
+	bufSize int
+	c       chan int
+}
+
+func NewMyWg(bufSize int) *MyWg {
+	return &MyWg{
+		bufSize: bufSize,
+		c:       make(chan int, bufSize),
+	}
+}
+
+// Add change [WaitGroup] counter.
+func (w *MyWg) Add(delta int) {
+	newC := atomic.AddInt64(&w.counter, int64(delta))
+	if newC >= int64(w.bufSize) {
+		panic("WaitGroup buffer size excited")
+	} else if newC < 0 {
+		panic("negative WaitGroup counter")
+	}
+	w.c <- 1
+}
+
+// Wait blocks until the [WaitGroup] counter is zero.
+func (w *MyWg) Wait() {
+	for atomic.LoadInt64(&w.counter) != 0 {
+		<-w.c
+	}
+}
+
 func main() {
+	n := 10
+	wg := NewMyWg(1024)
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(n int) {
+			job(n)
+			wg.Add(-1)
+		}(i)
+	}
+
+	wg.Wait()
+
+	fmt.Printf("All jobs done\n")
+}
+
+func main_() {
 	var (
 		n  int = 10
 		wg sync.WaitGroup
@@ -26,7 +75,7 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			job(n)
-			wg.Done()
+			wg.Add(-1)
 		}(i)
 	}
 
