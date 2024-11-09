@@ -43,9 +43,33 @@ func (w *MyWg) Wait() {
 	}
 }
 
+type MyWg2 struct {
+	c chan int
+}
+
+func NewMyWg2(bufSize int) *MyWg2 {
+	return &MyWg2{
+		c: make(chan int, bufSize),
+	}
+}
+
+// Add change [WaitGroup] counter.
+func (w *MyWg2) Add(delta int) {
+	w.c <- delta
+}
+
+// Wait blocks until the [WaitGroup] counter is zero.
+func (w *MyWg2) Wait() {
+	counter := int64(<-w.c)
+	for counter != 0 {
+		counter = counter + int64(<-w.c)
+	}
+	fmt.Printf("Done")
+}
+
 func main() {
 	n := 10
-	wg := NewMyWg(1024)
+	wg := NewMyWg2(1024)
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
