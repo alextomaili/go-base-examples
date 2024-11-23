@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 /*
@@ -59,12 +60,34 @@ func (w *MyWg2) Add(delta int) {
 }
 
 // Wait blocks until the [WaitGroup] counter is zero.
-func (w *MyWg2) Wait() {
-	counter := int64(<-w.c)
-	for counter != 0 {
-		counter = counter + int64(<-w.c)
+func (w *MyWg2) Wait(timeout time.Duration) bool {
+	t := time.NewTimer(timeout)
+
+	counter, isTimeout := w.readChanel(t)
+	if isTimeout {
+		return false
 	}
-	fmt.Printf("Done")
+
+	for counter != 0 {
+		c, isTimeout := w.readChanel(t)
+		if isTimeout {
+			return false
+		}
+
+		counter = counter + c
+	}
+
+	fmt.Printf("Wg Done\n")
+	return true
+}
+
+func (w *MyWg2) readChanel(t *time.Timer) (int64, bool) {
+	select {
+	case cv := <-w.c:
+		return int64(cv), false
+	case <-t.C:
+		return 0, true
+	}
 }
 
 func main() {
@@ -75,11 +98,16 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			job(n)
+			time.Sleep(time.Second * 10)
 			wg.Add(-1)
 		}(i)
 	}
 
-	wg.Wait()
+	if wg.Wait(time.Second) {
+		fmt.Printf("Wait Dome\n")
+	} else {
+		fmt.Printf("Wait Timeout\n")
+	}
 
 	fmt.Printf("All jobs done\n")
 }
