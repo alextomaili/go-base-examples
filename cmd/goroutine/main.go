@@ -62,6 +62,7 @@ func (w *MyWg2) Add(delta int) {
 // Wait blocks until the [WaitGroup] counter is zero.
 func (w *MyWg2) Wait(timeout time.Duration) bool {
 	t := time.NewTimer(timeout)
+	defer t.Stop()
 
 	counter, isTimeout := w.readChanel(t)
 	if isTimeout {
@@ -91,6 +92,8 @@ func (w *MyWg2) readChanel(t *time.Timer) (int64, bool) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(1)
+
 	n := 10
 	wg := NewMyWg2(1024)
 
@@ -98,7 +101,7 @@ func main() {
 		wg.Add(1)
 		go func(n int) {
 			job(n)
-			time.Sleep(time.Second * 10)
+			time.Sleep(time.Hour)
 			wg.Add(-1)
 		}(i)
 	}
