@@ -46,6 +46,18 @@ func (a *Animal) Age() int {
 }
 
 func main() {
+	a := Animal{
+		name: "Bobik",
+	}
+	var ager api2.Ager = &a
+	api2.PrintAge(ager)
+
+	f := &Foo{a: 1024, b: "BBBBB"}
+	var i any = f
+	api2.PrintAny(i)
+}
+
+func main2() {
 	f := Foo{
 		a: 10,
 		b: "f-10",

@@ -38,10 +38,14 @@ func PrintAll(i interface{}) {
 	fmt.Println(r)
 }
 
-/*
-// efaceWords is interface{} internal representation.
-type efaceWords struct {
-	typ  unsafe.Pointer
-	data unsafe.Pointer
+func PrintAny(a any) {
+	fmt.Println(a)
 }
+
+/*
+   // efaceWords is interface{} internal representation.
+   type efaceWords struct {
+   	typ  unsafe.Pointer
+   	data unsafe.Pointer
+   }
 */
