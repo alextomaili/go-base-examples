@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/alextomaili/go-base-examples/cmd/interfaces/api2"
+	"runtime"
 	"strconv"
 )
 
@@ -56,6 +57,21 @@ func main() {
 	var i any = f
 	api2.PrintAny(i)
 }
+
+func tt() {
+	runtime.LockOSThread()
+}
+
+// Pin this goroutine to a specific CPU core
+/*
+func pinToCPU(cpuID int) error {
+	runtime.LockOSThread() // lock goroutine to its current OS thread
+	var mask unix.CPUSet
+	mask.Zero()
+	mask.Set(cpuID)
+	return unix.SchedSetaffinity(0, &mask)
+}
+*/
 
 func main2() {
 	f := Foo{
