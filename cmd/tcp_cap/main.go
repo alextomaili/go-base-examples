@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"golang.org/x/net/bpf"
@@ -101,13 +102,18 @@ func main() {
 	}
 	log.Println("BPF filter attached (TCP SYN only)")
 
+	//recvFromLoop(fd, maxPackets)
+	recvMsgLoop(fd, maxPackets)
+}
+
+func recvFromLoop(fd int, maxPackets int64) {
 	buf := make([]byte, 65535)
 
 	var pc int64
 	for {
 		if maxPackets > -1 {
 			if pc >= maxPackets {
-				break
+				return
 			}
 			pc = pc + 1
 		}
@@ -118,6 +124,29 @@ func main() {
 		}
 
 		log.Printf("Captured %d bytes from %+v\n", n, from)
+	}
+}
+
+func recvMsgLoop(fd int, maxPackets int64) {
+	buf := make([]byte, 65535)
+	oob := make([]byte, 512) // for ancillary data
+
+	var pc int64
+	for {
+		if maxPackets > -1 {
+			if pc >= maxPackets {
+				return
+			}
+			pc = pc + 1
+		}
+
+		n, oobn, flags, from, err := unix.Recvmsg(fd, buf, oob, 0)
+		if err != nil {
+			log.Fatalf("recvmsg error: %v", err)
+		}
+
+		log.Printf("Received %d bytes from %+v (flags: %v, oob bytes: %d) [%s ...] \n",
+			n, from, flags, oobn, hex.EncodeToString(buf[:min(n, 16)]))
 	}
 }
 
