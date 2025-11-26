@@ -71,7 +71,7 @@ func (r *Reader) strDumpPacket(tcp *layers.TCP) {
 	fmt.Fprintf(b, " Flags {SYN: %t, ACK: %t, RST: %t, FIN: %t, PSH: %t, URG: %t}",
 		tcp.SYN, tcp.ACK, tcp.RST, tcp.FIN, tcp.PSH, tcp.URG)
 
-	fmt.Fprintf(b, " b: %v, flag: %v", r.buf[:40], r.buf[33:34])
+	fmt.Fprintf(b, " b: %v, flags byte: %v", r.buf[:40], r.buf[33:34])
 }
 
 func (r *Reader) PacketStr() string {
