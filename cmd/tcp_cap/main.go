@@ -75,24 +75,19 @@ func main() {
 
 func bpfSynPacketOnly() ([]bpf.RawInstruction, error) {
 	return bpf.Assemble([]bpf.Instruction{
-		/*
-			// Step 1: Load first byte of IP header (version + IHL)
-			bpf.LoadAbsolute{Off: 0, Size: 1},
 
-			// Step 2: Extract IHL (lower 4 bits) and multiply by 4
-			bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x0F},
-			bpf.ALUOpConstant{Op: bpf.ALUOpShiftLeft, Val: 2}, // x4
+		// load into X the length of an IPv4 packet header
+		// (Avoids the old TXA + LoadIndirect pattern which is unreliable in Go’s bpf package for cBPF.)
+		// first byte of the packet in our case is first byte of IP packet
+		// layout is: [IP][TCP]
+		bpf.LoadMemShift{Off: 0},
 
-			// Now A contains IP header length.
-			// We'll save it in X register.
-			bpf.TXA{}, // transfer A -> X
+		// load TCP flag byte
+		bpf.LoadIndirect{Off: 13, Size: 1},
 
-			// Step 3: Load TCP flags: load byte at offset X + 13
-			bpf.LoadIndirect{Off: 13, Size: 1},
-		*/
-
-		// LoadIndirect + TXA in Go BPF is unreliable.
+		/*  -- this is a hack to debug only, in most cases len of IP packet is 20 bytes
 		bpf.LoadAbsolute{Off: 33, Size: 1},
+		*/
 
 		// Accept only packets where flags == SYN (0x02)
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x02, SkipTrue: 1},
