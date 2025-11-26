@@ -53,25 +53,32 @@ func (r *Reader) IpAddrStr() string {
 
 func (r *Reader) Process() error {
 	p := gopacket.NewPacket(r.buf[:r.n], layers.LayerTypeIPv4, gopacket.NoCopy)
+
+	ip4Layer := p.Layer(layers.LayerTypeIPv4)
+	if ip4Layer == nil {
+		return errors.New("packet doesn't contain LayerTypeIPv4")
+	}
+	ipv4 := ip4Layer.(*layers.IPv4)
+
 	tcpLayer := p.Layer(layers.LayerTypeTCP)
 	if tcpLayer == nil {
 		return errors.New("packet doesn't contain LayerTypeTCP")
 	}
-
 	tcp := tcpLayer.(*layers.TCP)
-	r.strDumpPacket(tcp)
+
+	r.strDumpIpv4AndTcpPacket(ipv4, tcp)
 	return nil
 }
 
-func (r *Reader) strDumpPacket(tcp *layers.TCP) {
+func (r *Reader) strDumpIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP) {
 	b := r.strBuf
 	b.Reset()
 
-	fmt.Fprintf(b, "%s:%d", r.IpAddrStr(), tcp.SrcPort)
-	fmt.Fprintf(b, " Flags {SYN: %t, ACK: %t, RST: %t, FIN: %t, PSH: %t, URG: %t}",
+	fmt.Fprintf(b, "addr: [%s:%d] ", ipv4.SrcIP.String(), tcp.SrcPort)
+	fmt.Fprintf(b, "ipv4: [IHL: %d, Length: %d, TTL: %d] ", ipv4.IHL, ipv4.Length, ipv4.TTL)
+	fmt.Fprintf(b, "tcp: [ Flags {SYN: %t, ACK: %t, RST: %t, FIN: %t, PSH: %t, URG: %t}] ",
 		tcp.SYN, tcp.ACK, tcp.RST, tcp.FIN, tcp.PSH, tcp.URG)
-
-	fmt.Fprintf(b, " b: %v, flags byte: %v", r.buf[:40], r.buf[33:34])
+	fmt.Fprintf(b, "raw captured: [ tcp flags: %v, rawb: %v ] ", r.buf[33:34], r.buf[:40])
 }
 
 func (r *Reader) PacketStr() string {
