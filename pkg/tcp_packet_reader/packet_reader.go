@@ -15,6 +15,9 @@ type Reader struct {
 	buf  []byte
 	n    int
 
+	// p0f compatible packet representation
+	pd packetData
+
 	strBuf *bytes.Buffer
 }
 
@@ -32,10 +35,14 @@ func (r *Reader) Read(rf func(a []byte, an *int, b []byte, n *int) error) error 
 	return rf(r.addr, &r.an, r.buf, &r.n)
 }
 
+func (r *Reader) resetPacketData() {
+	r.pd = packetData{}
+}
+
 func (r *Reader) Reset() {
+	r.resetPacketData()
 	r.an = 0
 	r.n = 0
-
 	r.strBuf.Reset()
 }
 
@@ -79,6 +86,11 @@ func (r *Reader) strDumpIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP) {
 	fmt.Fprintf(b, "tcp: [ Flags {SYN: %t, ACK: %t, RST: %t, FIN: %t, PSH: %t, URG: %t}] ",
 		tcp.SYN, tcp.ACK, tcp.RST, tcp.FIN, tcp.PSH, tcp.URG)
 	fmt.Fprintf(b, "raw captured: [ tcp flags: %v, rawb: %v ] ", r.buf[33:34], r.buf[:40])
+}
+
+func (r *Reader) makePacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP) {
+	r.resetPacketData()
+	buildPacketDataIpv4AndTcpPacket(ipv4, tcp, &r.pd)
 }
 
 func (r *Reader) PacketStr() string {

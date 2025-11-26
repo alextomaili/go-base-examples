@@ -65,7 +65,81 @@ https://github.com/p0f/p0f
  # https://github.com/p0f/p0f/blob/master/p0f.fp - фал правил
 
 
-
-Парсер пакетов протокола
+Парсер пакетов протокола на Go
 https://github.com/google/gopacket
+
+
+Как парсить протокол
+
+ 1. Парсим байтстрим в layers.IPv4, layers.TCP
+
+ 2. Смотрим https://github.com/p0f/p0f как пакеты парсятся в промежуточную структуру
+   /* Parse PCAP input, with plenty of sanity checking. Store interesting details
+     in a protocol-agnostic buffer that will be then examined upstream. */
+  void parse_packet(void* junk, const struct pcap_pkthdr* hdr, const u8* data) {...}
+
+  как вызыватся:
+      if (pcap_dispatch(pt, -1, (pcap_handler)parse_packet, 0) < 0)
+
+
+  void parse_packet(void* junk, const struct pcap_pkthdr* hdr, const u8* data) {
+    struct packet_data pk;
+     .....
+     .... заполняем из hdr и data
+     .....
+    flow_dispatch(&pk); << обработка, тут делаются фингеприныт из данных в "struct packet_data"
+  }
+
+## ################################################
+
+Либа для работы с дескрипторами сокетов на низком уровне
+https://github.com/mikioh/tcpopt - The tcpopt library provides encoding/decoding of TCP-level socket options for Go.
+https://github.com/mikioh/tcpinfo - The tcpinfo library provides encoding/decoding of TCP connection state information
+
+cgo шаблон
+https://github.com/mikioh/tcpinfo/blob/c87206fb4c9e77563969f5ed106798b287cc9049/defs_linux.go#L16
+
+#include <linux/inet_diag.h>
+#include <linux/sockios.h>
+#include <linux/tcp.h>
+
+type tcpInfo C.struct_tcp_info
+type tcpCCInfo C.union_tcp_cc_info
+
+
+type tcpInfo struct {
+	State           uint8
+	Ca_state        uint8
+	Retransmits     uint8
+	Probes          uint8
+	Backoff         uint8
+	Options         uint8
+	Pad_cgo_0       [1]byte
+	Pad_cgo_1       [1]byte
+	Rto             uint32
+
+
+from /include/uapi/linux/tcp.h
+
+struct tcp_info {
+    __u8    tcpi_state;
+    __u8    tcpi_ca_state;
+    __u8    tcpi_retransmits;
+    __u8    tcpi_probes;
+    __u8    tcpi_backoff;
+    __u8    tcpi_options;
+
+
+struct tcp_info is a kernel→userspace diagnostics structure used to retrieve detailed
+runtime information about a TCP connection.
+It does NOT control TCP behavior — it reports the internal state of the TCP socket.
+
+It is used by:
+getsockopt(fd, SOL_TCP, TCP_INFO, ...)
+tools like ss -ti, ip tcp_metrics, netstat -s, tcpdump -v
+performance monitoring systems
+congestion-control analysis tools
+socket debugging
+retransmission and latency diagnostics
+connection profiling
 

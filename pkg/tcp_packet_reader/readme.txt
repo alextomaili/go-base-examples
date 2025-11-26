@@ -14,6 +14,5 @@ func (r *Reader) Process() error {
 }
 
 
-Как еще можно парсить пакеты
-https://github.com/mikioh/tcpinfo
+
 
