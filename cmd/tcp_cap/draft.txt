@@ -1,0 +1,62 @@
+	// BPF filter: match TCP SYN packets (tcp[13] & 0x02 != 0)
+	// IP header is included because AF_INET raw sockets pass IP+TCP
+	filter, err := bpf.Assemble([]bpf.Instruction{
+		// Load TCP flags byte: offset 13 from TCP header beginning.
+		// But TCP header offset depends on IP header length.
+		// So we must calculate offset: IP header length = (ip[0] & 0x0F) * 4
+		// TCP flags = TCP offset + 13
+
+		// load tcp flags byte
+		bpf.LoadAbsolute{Off: 13, Size: 1},
+
+		/*
+			// Step 1: Load first byte of IP header (version + IHL)
+			bpf.LoadAbsolute{Off: 0, Size: 1},
+
+			// Step 2: Extract IHL (lower 4 bits) and multiply by 4
+			bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x0F},
+			bpf.ALUOpConstant{Op: bpf.ALUOpShiftLeft, Val: 2}, // x4
+
+			// Now A contains IP header length.
+			// We'll save it in X register.
+			bpf.TXA{}, // transfer A -> X
+
+			// Step 3: Load TCP flags: load byte at offset X + 13
+			bpf.LoadIndirect{Off: 13, Size: 1},
+*/
+
+/*
+	// Step 4: Check SYN bit
+	bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x02},
+	bpf.JumpIf{Cond: bpf.JumpNotEqual, Val: 0, SkipFalse: 1},
+
+	// ACCEPT
+	bpf.RetConstant{Val: 65535},
+
+	// REJECT
+	bpf.RetConstant{Val: 0},
+*/
+
+// Accept only packets where flags == SYN (0x02)
+bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x02, SkipTrue: 1},
+
+// Reject
+bpf.RetConstant{Val: 0},
+
+// Accept full packet
+bpf.RetConstant{Val: 0xFFFF},
+})
+
+
+
+	return bpf.Assemble([]bpf.Instruction{
+		// load tcp flags byte
+		bpf.LoadAbsolute{Off: 13, Size: 1},
+
+		// check SYN bit
+		bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x02},
+		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x02, SkipTrue: 1},
+
+		bpf.RetConstant{Val: 0},     // reject
+		bpf.RetConstant{Val: 65535}, // accept
+	})

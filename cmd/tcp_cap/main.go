@@ -1,9 +1,9 @@
 package main
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
+	"github.com/alextomaili/go-base-examples/pkg/tcp_packet_reader"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sys/unix"
 	"log"
@@ -44,6 +44,21 @@ func main() {
 	}
 	defer unix.Close(fd)
 
+	filter, bpfErr := bpfSynPacketOnly()
+	if bpfErr != nil {
+		log.Fatalf("BPF assemble error: %v", bpfErr)
+	}
+
+	sockFilters := toSockFilter(filter)
+	fprog := unix.SockFprog{
+		Len:    uint16(len(sockFilters)),
+		Filter: &sockFilters[0],
+	}
+	if err := unix.SetsockoptSockFprog(fd, unix.SOL_SOCKET, unix.SO_ATTACH_FILTER, &fprog); err != nil {
+		log.Fatalf("attach BPF error: %v", err)
+	}
+	log.Println("BPF filter attached (TCP SYN only)")
+
 	addr := &unix.SockaddrInet4{
 		Port: 0,
 	}
@@ -54,60 +69,61 @@ func main() {
 	}
 	log.Println("Raw socket created and bound:", fd)
 
-	// BPF filter: match TCP SYN packets (tcp[13] & 0x02 != 0)
-	// IP header is included because AF_INET raw sockets pass IP+TCP
-	filter, err := bpf.Assemble([]bpf.Instruction{
-		// Load TCP flags byte: offset 13 from TCP header beginning.
-		// But TCP header offset depends on IP header length.
-		// So we must calculate offset: IP header length = (ip[0] & 0x0F) * 4
-		// TCP flags = TCP offset + 13
+	recvFromLoop(fd, maxPackets)
+	//recvMsgLoop(fd, maxPackets)
+}
 
-		// Step 1: Load first byte of IP header (version + IHL)
-		bpf.LoadAbsolute{Off: 0, Size: 1},
+func bpfSynPacketOnly() ([]bpf.RawInstruction, error) {
+	return bpf.Assemble([]bpf.Instruction{
+		/*
+			// Step 1: Load first byte of IP header (version + IHL)
+			bpf.LoadAbsolute{Off: 0, Size: 1},
 
-		// Step 2: Extract IHL (lower 4 bits) and multiply by 4
-		bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x0F},
-		bpf.ALUOpConstant{Op: bpf.ALUOpShiftLeft, Val: 2}, // x4
+			// Step 2: Extract IHL (lower 4 bits) and multiply by 4
+			bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x0F},
+			bpf.ALUOpConstant{Op: bpf.ALUOpShiftLeft, Val: 2}, // x4
 
-		// Now A contains IP header length.
-		// We'll save it in X register.
-		bpf.TXA{}, // transfer A -> X
+			// Now A contains IP header length.
+			// We'll save it in X register.
+			bpf.TXA{}, // transfer A -> X
 
-		// Step 3: Load TCP flags: load byte at offset X + 13
-		bpf.LoadIndirect{Off: 13, Size: 1},
+			// Step 3: Load TCP flags: load byte at offset X + 13
+			bpf.LoadIndirect{Off: 13, Size: 1},
+		*/
 
-		// Step 4: Check SYN bit
-		bpf.ALUOpConstant{Op: bpf.ALUOpAnd, Val: 0x02},
-		bpf.JumpIf{Cond: bpf.JumpNotEqual, Val: 0, SkipFalse: 1},
+		// LoadIndirect + TXA in Go BPF is unreliable.
+		bpf.LoadAbsolute{Off: 33, Size: 1},
 
-		// ACCEPT
-		bpf.RetConstant{Val: 65535},
+		// Accept only packets where flags == SYN (0x02)
+		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 0x02, SkipTrue: 1},
 
-		// REJECT
+		// Reject
 		bpf.RetConstant{Val: 0},
+
+		// Accept full packet
+		bpf.RetConstant{Val: 0xFFFF},
 	})
-	if err != nil {
-		log.Fatalf("BPF assemble error: %v", err)
-	}
 
-	sockFilters := toSockFilter(filter)
-
-	fprog := unix.SockFprog{
-		Len:    uint16(len(sockFilters)),
-		Filter: &sockFilters[0],
-	}
-
-	if err := unix.SetsockoptSockFprog(fd, unix.SOL_SOCKET, unix.SO_ATTACH_FILTER, &fprog); err != nil {
-		log.Fatalf("attach BPF error: %v", err)
-	}
-	log.Println("BPF filter attached (TCP SYN only)")
-
-	//recvFromLoop(fd, maxPackets)
-	recvMsgLoop(fd, maxPackets)
 }
 
 func recvFromLoop(fd int, maxPackets int64) {
-	buf := make([]byte, 65535)
+	r := tcp_packet_reader.NewReader()
+
+	rf := func(a []byte, an *int, b []byte, n *int) error {
+		var (
+			err  error
+			from unix.Sockaddr
+		)
+
+		*n, from, err = unix.Recvfrom(fd, b, 0)
+		if err == nil {
+			adr := from.(*unix.SockaddrInet4).Addr[:] // because fd, err := unix.Socket(unix.AF_INET ...
+			copy(a, adr)
+			*an = len(adr)
+		}
+
+		return err
+	}
 
 	var pc int64
 	for {
@@ -118,18 +134,40 @@ func recvFromLoop(fd int, maxPackets int64) {
 			pc = pc + 1
 		}
 
-		n, from, err := unix.Recvfrom(fd, buf, 0)
+		r.Reset()
+		err := r.Read(rf)
 		if err != nil {
 			log.Fatalf("recvfrom error: %v", err)
 		}
 
-		log.Printf("Captured %d bytes from %+v\n", n, from)
+		err = r.Process()
+		if err != nil {
+			log.Fatalf("process packet error: %v", err)
+		}
+
+		log.Printf("Captured %d bytes from: %+v packet: [%s] \n",
+			r.BufLen(), r.IpAddr(), r.PacketStr())
 	}
 }
 
 func recvMsgLoop(fd int, maxPackets int64) {
-	buf := make([]byte, 65535)
-	oob := make([]byte, 512) // for ancillary data
+	r := tcp_packet_reader.NewReaderExt()
+
+	rf := func(a []byte, an *int, b []byte, n *int, oob []byte, oobn *int, flags *int) error {
+		var (
+			err  error
+			from unix.Sockaddr
+		)
+
+		*n, *oobn, *flags, from, err = unix.Recvmsg(fd, b, oob, 0)
+		if err == nil {
+			adr := from.(*unix.SockaddrInet4).Addr[:] // because fd, err := unix.Socket(unix.AF_INET ...
+			copy(a, adr)
+			*an = len(adr)
+		}
+
+		return err
+	}
 
 	var pc int64
 	for {
@@ -140,13 +178,14 @@ func recvMsgLoop(fd int, maxPackets int64) {
 			pc = pc + 1
 		}
 
-		n, oobn, flags, from, err := unix.Recvmsg(fd, buf, oob, 0)
+		r.Reset()
+		err := r.ReadExt(rf)
 		if err != nil {
-			log.Fatalf("recvmsg error: %v", err)
+			log.Fatalf("recvfrom error: %v", err)
 		}
 
-		log.Printf("Received %d bytes from %+v (flags: %v, oob bytes: %d) [%s ...] \n",
-			n, from, flags, oobn, hex.EncodeToString(buf[:min(n, 16)]))
+		log.Printf("Received %d bytes from %+v (flags: %v, oob bytes: %d)\n",
+			r.BufLen(), r.IpAddr(), r.Flags(), r.OobBufLen())
 	}
 }
 
