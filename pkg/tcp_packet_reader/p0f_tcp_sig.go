@@ -93,7 +93,11 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 		return 0, fmt.Errorf("ret buffer too small")
 	}
 
-	i := 0
+	var (
+		i   int      // current position in write buffer
+		tmp [32]byte // tmp buffer
+	)
+
 	write := func(s string) error {
 		if i+len(s) > len(ret) {
 			return fmt.Errorf("buffer too small")
@@ -104,13 +108,12 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 	}
 
 	writeInt := func(v int) error {
-		// max 10 digits inplace
-		buf := strconv.AppendInt(ret[:0], int64(v), 10)
-		if i+len(buf) > len(ret) {
+		b := strconv.AppendInt(tmp[:0], int64(v), 10)
+		if i+len(b) > len(ret) {
 			return fmt.Errorf("buffer too small")
 		}
-		copy(ret[i:], buf)
-		i += len(buf)
+		copy(ret[i:], b)
+		i += len(b)
 		return nil
 	}
 
@@ -135,6 +138,8 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 	// ----------------------------------------------------------
 	// Part 2: MSS
 	// ----------------------------------------------------------
+
+	// Detect a system echoing back MSS from p0f-sendsyn queries, suggest using a wildcard in such a case.
 	if pk.MSS == SPECIAL_MSS && pk.TCPType == (TCP_SYN|TCP_ACK) {
 		if err := write("*:"); err != nil {
 			return 0, err

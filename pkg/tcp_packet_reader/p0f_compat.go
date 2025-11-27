@@ -91,7 +91,7 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 	// --------------------------
 	//
 
-	pk.IPVer = 4
+	pk.IPVer = uint8(IP_VER4)
 
 	// Copy IPv4 into left-aligned 16-byte array
 	copy(pk.Src[:], ipv4.SrcIP.To4())
