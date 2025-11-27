@@ -31,20 +31,6 @@ import (
 //		u32 seq;                              /* seq value seen                     */
 //	};
 
-const (
-	MAX_TCP_OPT = 24
-)
-
-// TCP flag bitmasks (uint8), matching p0f C definitions
-const (
-	TCP_FIN  uint8 = 0x01
-	TCP_SYN  uint8 = 0x02
-	TCP_RST  uint8 = 0x04
-	TCP_PUSH uint8 = 0x08
-	TCP_ACK  uint8 = 0x10
-	TCP_URG  uint8 = 0x20
-)
-
 type packetData struct {
 	IPVer     uint8    // ip_ver
 	TCPType   uint8    // tcp_type (SYN/ACK/FIN/RST flags masked)
@@ -210,9 +196,9 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 
 	//
 	// Payload
-	// todo: use tcp.Payload
+	// todo: now i don't provide payload, but it may be required for something, do not forget
 	pk.Payload = nil
-	pk.PayLen = 0
+	pk.PayLen = uint16(len(tcp.Payload)) // requred for TCP-SYN fingerprint
 
 	//
 	// --------------------------

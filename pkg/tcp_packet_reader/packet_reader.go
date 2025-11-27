@@ -16,16 +16,22 @@ type Reader struct {
 	n    int
 
 	// p0f compatible packet representation
-	pd packetData
+	pd     packetData
+	tcpSig tcpSig
 
+	tcpSynSig  []byte
+	tcpSynSigN int
+
+	// for debug
 	strBuf *bytes.Buffer
 }
 
 func NewReader() *Reader {
 	r := &Reader{
-		addr:   make([]byte, 16),
-		buf:    make([]byte, 65535),
-		strBuf: bytes.NewBuffer(make([]byte, 0, 1024)),
+		addr:      make([]byte, 16),
+		buf:       make([]byte, 65535),
+		tcpSynSig: make([]byte, 1024),
+		strBuf:    bytes.NewBuffer(make([]byte, 0, 2048)),
 	}
 
 	return r
@@ -37,6 +43,8 @@ func (r *Reader) Read(rf func(a []byte, an *int, b []byte, n *int) error) error 
 
 func (r *Reader) resetPacketData() {
 	r.pd = packetData{}
+	r.tcpSig = tcpSig{}
+	r.tcpSynSigN = 0
 }
 
 func (r *Reader) Reset() {
@@ -52,6 +60,10 @@ func (r *Reader) BufLen() int {
 
 func (r *Reader) IpAddr() []byte {
 	return r.addr[:r.an]
+}
+
+func (r *Reader) TcpSynSig() []byte {
+	return r.tcpSynSig[:r.tcpSynSigN]
 }
 
 func (r *Reader) IpAddrStr() string {
@@ -73,6 +85,10 @@ func (r *Reader) Process() error {
 	}
 	tcp := tcpLayer.(*layers.TCP)
 
+	if err := r.buildSignature(ipv4, tcp); err != nil {
+		return err
+	}
+
 	r.strDumpIpv4AndTcpPacket(ipv4, tcp)
 	return nil
 }
@@ -86,11 +102,28 @@ func (r *Reader) strDumpIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP) {
 	fmt.Fprintf(b, "tcp: [ Flags {SYN: %t, ACK: %t, RST: %t, FIN: %t, PSH: %t, URG: %t}] ",
 		tcp.SYN, tcp.ACK, tcp.RST, tcp.FIN, tcp.PSH, tcp.URG)
 	fmt.Fprintf(b, "raw captured: [ tcp flags: %v, rawb: %v ] ", r.buf[33:34], r.buf[:40])
+	fmt.Fprintf(b, "syn_sig: [ %s ] ", string(r.TcpSynSig()))
 }
 
-func (r *Reader) makePacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP) {
+func (r *Reader) buildSignature(ipv4 *layers.IPv4, tcp *layers.TCP) error {
 	r.resetPacketData()
+
 	buildPacketDataIpv4AndTcpPacket(ipv4, tcp, &r.pd)
+	packetToSig(&r.pd, 0, &r.tcpSig)
+
+	// synMSS = 0 - looks like OK for syn packet because we have this in fp_tcp.c:
+	// struct tcp_sig* fingerprint_tcp( ........
+	//    ....
+	//    add_observation_field("raw_sig", dump_sig(pk, sig, f->syn_mss));
+	//    if (pk->tcp_type == TCP_SYN) f->syn_mss = pk->mss;
+	//
+	if sl, err := dumpSig(&r.pd, &r.tcpSig, r.tcpSynSig, 0); err == nil {
+		r.tcpSynSigN = sl
+	} else {
+		return err
+	}
+
+	return nil
 }
 
 func (r *Reader) PacketStr() string {
