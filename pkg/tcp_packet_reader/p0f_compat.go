@@ -31,6 +31,20 @@ import (
 //		u32 seq;                              /* seq value seen                     */
 //	};
 
+const (
+	MAX_TCP_OPT = 24
+)
+
+// TCP flag bitmasks (uint8), matching p0f C definitions
+const (
+	TCP_FIN  uint8 = 0x01
+	TCP_SYN  uint8 = 0x02
+	TCP_RST  uint8 = 0x04
+	TCP_PUSH uint8 = 0x08
+	TCP_ACK  uint8 = 0x10
+	TCP_URG  uint8 = 0x20
+)
+
 type packetData struct {
 	IPVer     uint8    // ip_ver
 	TCPType   uint8    // tcp_type (SYN/ACK/FIN/RST flags masked)
@@ -44,7 +58,7 @@ type packetData struct {
 	Win       uint16
 	WScale    uint8
 	TotHdr    uint16
-	OptLayout [40]uint8 // MAX_TCP_OPT = 40 in p0f
+	OptLayout [MAX_TCP_OPT]uint8 // MAX_TCP_OPT = 40 in p0f
 	OptCnt    uint8
 	OptEOLPad uint8
 	TS1       uint32
@@ -62,7 +76,7 @@ const (
 	QUIRK_NZ_ID   uint32 = 0x00000004 // Non-zero IDs when DF set
 	QUIRK_ZERO_ID uint32 = 0x00000008 // Zero IDs when DF not set
 	QUIRK_NZ_MBZ  uint32 = 0x00000010 // IP "must be zero" field isn't
-	QUIRK_FLOW    uint32 = 0x00000020 // IPv6 flows used
+	QUIRK_FLOW    uint32 = 0x00000020 // IPv6 flows used #:IPv6 only
 )
 
 // Core TCP quirks:
@@ -81,7 +95,7 @@ const (
 	QUIRK_OPT_NZ_TS2   uint32 = 0x02000000 // Peer timestamp non-zero on SYN
 	QUIRK_OPT_EOL_NZ   uint32 = 0x04000000 // Non-zero padding past EOL
 	QUIRK_OPT_EXWS     uint32 = 0x08000000 // Excessive window scaling
-	QUIRK_OPT_BAD      uint32 = 0x10000000 // Problem parsing TCP options
+	QUIRK_OPT_BAD      uint32 = 0x10000000 // Problem parsing TCP options #:looks like we can't get layers.TCP from broken data
 )
 
 func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *packetData) *packetData {
@@ -107,6 +121,10 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 	//
 	// quirks: IP-level
 	//
+
+	if ipv4.Flags&layers.IPv4EvilBit != 0 {
+		pk.Quirks |= QUIRK_NZ_MBZ
+	}
 
 	if ipv4.Flags&layers.IPv4DontFragment != 0 {
 		pk.Quirks |= QUIRK_DF
@@ -143,16 +161,16 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 	// P0f tcp_type = flags & (SYN|ACK|FIN|RST)
 	pk.TCPType = 0
 	if tcp.SYN {
-		pk.TCPType |= 0x02
+		pk.TCPType |= TCP_SYN
 	}
 	if tcp.ACK {
-		pk.TCPType |= 0x10
+		pk.TCPType |= TCP_ACK
 	}
 	if tcp.FIN {
-		pk.TCPType |= 0x01
+		pk.TCPType |= TCP_FIN
 	}
 	if tcp.RST {
-		pk.TCPType |= 0x04
+		pk.TCPType |= TCP_RST
 	}
 
 	//
@@ -192,7 +210,7 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 
 	//
 	// Payload
-	//
+	// todo: use tcp.Payload
 	pk.Payload = nil
 	pk.PayLen = 0
 
@@ -205,7 +223,20 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 	// MSS, WScale, TS1 – possible from gopacket
 	for _, opt := range tcp.Options {
 
+		if pk.OptCnt < MAX_TCP_OPT {
+			pk.OptLayout[pk.OptCnt] = uint8(opt.OptionType)
+			pk.OptCnt++
+		}
+
 		switch opt.OptionType {
+
+		case layers.TCPOptionKindEndList:
+			pk.OptEOLPad = uint8(len(tcp.Padding)) // Amount of padding past EOL
+			for _, b := range tcp.Padding {
+				if b != 0 {
+					pk.Quirks |= QUIRK_OPT_EOL_NZ // Non-zero padding past EOL
+				}
+			}
 
 		case layers.TCPOptionKindMSS:
 			if len(opt.OptionData) >= 2 {
@@ -226,10 +257,15 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 				if pk.TS1 == 0 {
 					pk.Quirks |= QUIRK_OPT_ZERO_TS1
 				}
+				if pk.TCPType == TCP_SYN && binary.BigEndian.Uint32(opt.OptionData[4:8]) != 0 {
+					pk.Quirks |= QUIRK_OPT_NZ_TS2
+				}
 			}
 		}
 	}
 
+	//
+	// from chat-gpt:
 	//
 	// Missing p0f raw-option-level details
 	//
@@ -242,9 +278,10 @@ func buildPacketDataIpv4AndTcpPacket(ipv4 *layers.IPv4, tcp *layers.TCP, pk *pac
 	// pk.OptEOLPad = doesn't have information
 	//   requires raw bytes after EOL marker; gopacket discards padding.
 	//
-	// pk.Quirks |= QUIRK_OPT_* (those based on raw layout) = cannot determine
-	//  QUIRK_OPT_EOL_NZ, QUIRK_OPT_BAD, QUIRK_OPT_NZ_TS2
-	//  depend on raw option parsing errors or padding.
+	// pk.Quirks |= QUIRK_OPT_* (those based on raw layout) = cannot determine:
+	//  QUIRK_OPT_EOL_NZ - provided
+	//  QUIRK_OPT_BAD
+	//  QUIRK_OPT_NZ_TS2 - provided
 	//
 	// Payload pointer exact semantics: gopacket gives payload, but not pointer arithmetic;
 	//  depending on p0f’s usage this is “good enough.”
