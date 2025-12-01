@@ -88,7 +88,7 @@ func packetToSig(pk *packetData, seed uint32, ts *tcpSig) {
 // dumpSig renders a TCP signature into a caller-provided buffer.
 // ret must have enough capacity; otherwise returns an error.
 // Returns number of bytes written through returned length.
-func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error) {
+func dumpSig(pk *packetData, ts *tcpSig, ret []byte, splits *[]int, synMSS uint16) (int, error) {
 	if len(ret) == 0 {
 		return 0, fmt.Errorf("ret buffer too small")
 	}
@@ -117,6 +117,26 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 		return nil
 	}
 
+	//	0123456789
+	//	4:48+16:0:1400:65535,9:mss,sok,ts,nop,ws:df,id+:0________
+	//	  ^     ^ ^    ^       ^                 ^       ^  <<--- i before call storeSplits()
+	//
+	//	0-1, 2-7, .......
+
+	sspl := func() {
+		delimPushed := ret[i-1] == ':'
+		sP := 0
+		if len(*splits) > 0 {
+			sP = (*splits)[len(*splits)-1] + 1
+		}
+		eP := i
+		if delimPushed {
+			eP = i - 1
+		}
+		*splits = append(*splits, sP)
+		*splits = append(*splits, eP)
+	}
+
 	// ----------------------------------------------------------
 	// Part 1: IP version, TTL+dist, IP option len
 	//   C: "%u:%u+%u:%u:"
@@ -125,14 +145,45 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 
 	if dist > MAX_DIST {
 		// "%u:%u+?:%u:"
-		if err := write(fmt.Sprintf("%d:%d+?:%d:", pk.IPVer, pk.TTL, pk.IPOptLen)); err != nil {
+		//if err := write(fmt.Sprintf("%d:%d+?:%d:", pk.IPVer, pk.TTL, pk.IPOptLen)); err != nil {
+		//	return 0, err
+		//}
+
+		if err := write(fmt.Sprintf("%d:", pk.IPVer)); err != nil {
 			return 0, err
 		}
+		sspl()
+
+		if err := write(fmt.Sprintf("%d+?:", pk.TTL)); err != nil {
+			return 0, err
+		}
+		sspl()
+
+		if err := write(fmt.Sprintf("%d:", pk.IPOptLen)); err != nil {
+			return 0, err
+		}
+		sspl()
+
 	} else {
 		// "%u:%u+%u:%u:"
-		if err := write(fmt.Sprintf("%d:%d+%d:%d:", pk.IPVer, pk.TTL, dist, pk.IPOptLen)); err != nil {
+		//if err := write(fmt.Sprintf("%d:%d+%d:%d:", pk.IPVer, pk.TTL, dist, pk.IPOptLen)); err != nil {
+		//	return 0, err
+		//}
+
+		if err := write(fmt.Sprintf("%d:", pk.IPVer)); err != nil {
 			return 0, err
 		}
+		sspl()
+
+		if err := write(fmt.Sprintf("%d+%d:", pk.TTL, dist)); err != nil {
+			return 0, err
+		}
+		sspl()
+
+		if err := write(fmt.Sprintf("%d:", pk.IPOptLen)); err != nil {
+			return 0, err
+		}
+		sspl()
 	}
 
 	// ----------------------------------------------------------
@@ -152,6 +203,7 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 			return 0, err
 		}
 	}
+	sspl()
 
 	// ----------------------------------------------------------
 	// Part 3: detect window multiplier (MSS or MTU)
@@ -189,6 +241,7 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 	if err := write(":"); err != nil {
 		return 0, err
 	}
+	sspl()
 
 	// ----------------------------------------------------------
 	// Part 4: TCP option layout
@@ -241,6 +294,7 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 	if err := write(":"); err != nil {
 		return 0, err
 	}
+	sspl()
 
 	// ----------------------------------------------------------
 	// Part 5: quirks
@@ -347,18 +401,24 @@ func dumpSig(pk *packetData, ts *tcpSig, ret []byte, synMSS uint16) (int, error)
 		}
 	}
 
+	if err := write(":"); err != nil {
+		return 0, err
+	}
+	sspl()
+
 	// ----------------------------------------------------------
 	// Part 6: payload size
 	// ----------------------------------------------------------
 	if pk.PayLen > 0 {
-		if err := write(":+"); err != nil {
+		if err := write("+"); err != nil {
 			return 0, err
 		}
 	} else {
-		if err := write(":0"); err != nil {
+		if err := write("0"); err != nil {
 			return 0, err
 		}
 	}
+	sspl()
 
 	return i, nil
 }

@@ -13,13 +13,12 @@ import (
 var (
 	fIp = flag.String("ip", "127.0.0.1", "target ip")
 	fNp = flag.Int("n", 20, "packet count")
+	fPf = flag.String("pf", "debug", "print format")
 )
+var processOpts *tcp_packet_reader.ProcessOpts
 
-func initArgs() (targetIP net.IP, maxPackets int64) {
-	log.SetFlags(log.Ldate)
-	log.SetFlags(log.Ltime)
-	log.SetFlags(log.Lmicroseconds)
-	log.SetFlags(log.Lshortfile)
+func initArgs() (targetIP net.IP, maxPackets int64, po tcp_packet_reader.ProcessOpts) {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 
 	flag.Parse()
 
@@ -29,13 +28,30 @@ func initArgs() (targetIP net.IP, maxPackets int64) {
 	if targetIP == nil {
 		log.Fatalf("invalid argument: bad ipv4")
 	}
-	fmt.Printf("Use ip: %s, packet count: %d\n", *fIp, *fNp)
 
-	return targetIP, maxPackets
+	pf := tcp_packet_reader.PF_DEBUG
+	switch *fPf {
+	case "debug":
+		pf = tcp_packet_reader.PF_DEBUG
+	case "csv":
+		pf = tcp_packet_reader.PF_CSV
+	}
+
+	po = tcp_packet_reader.ProcessOpts{
+		PrintFormat: pf,
+	}
+
+	if po.PrintFormat == tcp_packet_reader.PF_DEBUG {
+		fmt.Printf("Use ip: %s, packet count: %d, output format: %s(%d)\n", *fIp, *fNp, *fPf, pf)
+	}
+
+	return targetIP, maxPackets, po
 }
 
 func main() {
-	ipv4, maxPackets := initArgs()
+	ipv4, maxPackets, po := initArgs()
+
+	processOpts = &po
 
 	// unix.AF_INET - for ipv4
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_TCP)
@@ -57,7 +73,10 @@ func main() {
 	if err := unix.SetsockoptSockFprog(fd, unix.SOL_SOCKET, unix.SO_ATTACH_FILTER, &fprog); err != nil {
 		log.Fatalf("attach BPF error: %v", err)
 	}
-	log.Println("BPF filter attached (TCP SYN only)")
+
+	if po.PrintFormat == tcp_packet_reader.PF_DEBUG {
+		log.Println("BPF filter attached (TCP SYN only)")
+	}
 
 	addr := &unix.SockaddrInet4{
 		Port: 0,
@@ -67,10 +86,26 @@ func main() {
 	if err := unix.Bind(fd, addr); err != nil {
 		log.Fatalf("bind error: %v", err)
 	}
-	log.Println("Raw socket created and bound:", fd)
+
+	if po.PrintFormat == tcp_packet_reader.PF_DEBUG {
+		log.Println("Raw socket created and bound:", fd)
+	}
 
 	recvFromLoop(fd, maxPackets)
 	//recvMsgLoop(fd, maxPackets)
+}
+
+func toSockFilter(ins []bpf.RawInstruction) []unix.SockFilter {
+	out := make([]unix.SockFilter, len(ins))
+	for i, in := range ins {
+		out[i] = unix.SockFilter{
+			Code: in.Op,
+			Jt:   in.Jt,
+			Jf:   in.Jf,
+			K:    in.K,
+		}
+	}
+	return out
 }
 
 func bpfSynPacketOnly() ([]bpf.RawInstruction, error) {
@@ -103,6 +138,10 @@ func bpfSynPacketOnly() ([]bpf.RawInstruction, error) {
 
 func recvFromLoop(fd int, maxPackets int64) {
 	r := tcp_packet_reader.NewReader()
+	
+	if processOpts.PrintFormat == tcp_packet_reader.PF_CSV {
+		fmt.Println(r.CsvHeader())
+	}
 
 	rf := func(a []byte, an *int, b []byte, n *int) error {
 		var (
@@ -135,13 +174,17 @@ func recvFromLoop(fd int, maxPackets int64) {
 			log.Fatalf("recvfrom error: %v", err)
 		}
 
-		err = r.Process()
+		err = r.Process(processOpts)
 		if err != nil {
 			log.Fatalf("process packet error: %v", err)
 		}
 
-		log.Printf("Captured %d bytes from: %+v packet: [%s] \n",
-			r.BufLen(), r.IpAddr(), r.PacketStr())
+		if processOpts.PrintFormat == tcp_packet_reader.PF_CSV {
+			fmt.Println(r.PacketStr())
+		} else {
+			log.Printf("Captured %d bytes from: %+v packet: [%s] \n",
+				r.BufLen(), r.IpAddr(), r.PacketStr())
+		}
 	}
 }
 
@@ -182,19 +225,6 @@ func recvMsgLoop(fd int, maxPackets int64) {
 		log.Printf("Received %d bytes from %+v (flags: %v, oob bytes: %d)\n",
 			r.BufLen(), r.IpAddr(), r.Flags(), r.OobBufLen())
 	}
-}
-
-func toSockFilter(ins []bpf.RawInstruction) []unix.SockFilter {
-	out := make([]unix.SockFilter, len(ins))
-	for i, in := range ins {
-		out[i] = unix.SockFilter{
-			Code: in.Op,
-			Jt:   in.Jt,
-			Jf:   in.Jf,
-			K:    in.K,
-		}
-	}
-	return out
 }
 
 func htons(i uint16) uint16 { return (i<<8)&0xff00 | i>>8 }
